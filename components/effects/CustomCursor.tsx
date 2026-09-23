@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useState, useRef } from "react";
 
 export default function CustomCursor() {
-  const [mousePosition, setMousePosition] = useState({ x: -100, y: -100 });
+  const cursorRef = useRef<HTMLDivElement>(null);
   const [cursorText, setCursorText] = useState("");
   const [isHovered, setIsHovered] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
@@ -13,10 +12,35 @@ export default function CustomCursor() {
     if (window.matchMedia("(pointer: coarse)").matches) return;
     setIsVisible(true);
 
-    const updateMousePosition = (e: MouseEvent) => {
-      setMousePosition({ x: e.clientX, y: e.clientY });
+    const cursor = cursorRef.current;
+    if (!cursor) return;
+
+    let mouseX = -100;
+    let mouseY = -100;
+    let animationFrameId: number;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
     };
 
+    const render = () => {
+      const size = cursor.dataset.hovered === "true" ? 80 : 12;
+      const offset = size / 2;
+      cursor.style.transform = `translate3d(${mouseX - offset}px, ${mouseY - offset}px, 0)`;
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove, { passive: true });
+    animationFrameId = requestAnimationFrame(render);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
+  useEffect(() => {
     const handleMouseOver = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       const hoverable = target?.closest("[data-cursor]") as HTMLElement | null;
@@ -24,36 +48,32 @@ export default function CustomCursor() {
       if (hoverable) {
         setCursorText(hoverable.getAttribute("data-cursor") || "");
         setIsHovered(true);
+        if (cursorRef.current) cursorRef.current.dataset.hovered = "true";
       } else {
         setCursorText("");
         setIsHovered(false);
+        if (cursorRef.current) cursorRef.current.dataset.hovered = "false";
       }
     };
 
-    window.addEventListener("mousemove", updateMousePosition);
     window.addEventListener("mouseover", handleMouseOver);
-
-    return () => {
-      window.removeEventListener("mousemove", updateMousePosition);
-      window.removeEventListener("mouseover", handleMouseOver);
-    };
+    return () => window.removeEventListener("mouseover", handleMouseOver);
   }, []);
 
   if (!isVisible) return null;
 
   return (
-    <motion.div
-      className="pointer-events-none fixed top-0 left-0 z-50 flex items-center justify-center rounded-full bg-emerald-400 text-black text-[10px] font-mono tracking-widest font-bold shadow-[0_0_20px_rgba(16,185,129,0.5)] transition-colors duration-200 uppercase"
-      animate={{
-        x: mousePosition.x - (isHovered ? 40 : 6),
-        y: mousePosition.y - (isHovered ? 40 : 6),
-        width: isHovered ? 80 : 12,
-        height: isHovered ? 80 : 12,
-        opacity: 1,
+    <div
+      ref={cursorRef}
+      data-hovered={isHovered}
+      className="pointer-events-none fixed top-0 left-0 z-50 flex items-center justify-center rounded-full bg-emerald-400 text-black text-[10px] font-mono tracking-widest font-bold shadow-[0_0_20px_rgba(16,185,129,0.5)] uppercase transition-[width,height] duration-150 ease-out"
+      style={{
+        width: "12px",
+        height: "12px",
+        transform: "translate3d(-100px, -100px, 0)",
       }}
-      transition={{ type: "spring", stiffness: 400, damping: 28, mass: 0.1 }}
     >
       {isHovered && <span className="p-1 text-center leading-none">{cursorText}</span>}
-    </motion.div>
+    </div>
   );
 }
